@@ -43,7 +43,23 @@ This script is designed to split an audiobook into chapters based on detected ch
 
 - **Skip Phrases**: You can customize the phrases to skip when detecting chapters by editing the `skip_phrases.json` file.
 
-- **Chapter Phrase**: You can change what phrase to look for as the seperator between chapters using the '--chapter_phrase' option
+### Parameters
+
+| Parameter | Default | Description |
+|---|---|---|
+| `-i`, `--input` | — | Path to a specific MP3 file to process |
+| `--input_dir` | `Input` | Directory to search for MP3 files (used when `--input` is not provided) |
+| `--output_dir` | `Output` | Directory to write output files to |
+| `--model` | `base` | Whisper model to use for transcription |
+| `--threads` | `6` | Number of threads to use for transcription |
+| `--custom_chapter_phrase` | — | Custom regex phrase to use for chapter detection instead of the default "Chapter N" pattern |
+| `--chapter_index` | `0` | Number at which chapter file names will start |
+| `--no_intro` | — | Do not name the first output file "Intro" |
+
+Example:
+```bash
+python Splitter.py --input_dir /path/to/audiobooks --output_dir /path/to/output --model large-v3-turbo
+```
 
 ## License
 
