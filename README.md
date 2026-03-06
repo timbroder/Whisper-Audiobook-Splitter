@@ -25,11 +25,17 @@ This script is designed to split an audiobook into chapters based on detected ch
 ## Installation & usage
 
 1. Clone the repository:
-2. Install the required Python packages:
+2. Create and activate a virtual environment:
+   ```bash
+   python3 -m venv venv
+   source venv/bin/activate
+   ```
+3. Install the required Python packages:
    ```bash
    pip install -r requirements.txt
-3. Place your MP3 files in the `Input/` directory.
-4. Run the script:
+   ```
+4. Place your MP3 files in the `Input/` directory.
+5. Run the script:
    ```bash
    python Splitter.py
    ```
