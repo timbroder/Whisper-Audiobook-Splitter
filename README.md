@@ -27,8 +27,8 @@ This script is designed to split an audiobook into chapters based on detected ch
 1. Clone the repository:
 2. Create and activate a virtual environment:
    ```bash
-   python3 -m venv venv
-   source venv/bin/activate
+   python3 -m venv .venv
+   source .venv/bin/activate
    ```
 3. Install the required Python packages:
    ```bash
