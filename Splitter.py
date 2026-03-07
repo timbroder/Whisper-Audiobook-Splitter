@@ -144,13 +144,13 @@ def create_raw_file_with_timestamps(segments, raw_filename):
             raw_file.write(f"t0: {(segment.t0 * 10)}, t1: {segment.t1 * 10}\n")
             raw_file.write(f"{segment.text}\n\n")
 
-def create_output_structure(file, chapters, segments):
+def create_output_structure(file, chapters, segments, base_output_dir):
     """Create a structured output folder for the given file."""
     # Extract the file name without extension
     file_name = os.path.splitext(os.path.basename(file))[0]
     
     # Create a directory for the file
-    output_dir = os.path.join('Output', file_name)
+    output_dir = os.path.join(base_output_dir, file_name)
     os.makedirs(output_dir, exist_ok=True)
     
     # Create SRT file
@@ -172,13 +172,13 @@ def create_output_structure(file, chapters, segments):
     raw_filename = os.path.join(output_dir, f"{file_name}_timestamps.txt")
     create_raw_file_with_timestamps(segments, raw_filename)
 
-# Function to find the first MP3 file in the "Input" directory
-def find_first_mp3_in_input():
-    input_dir = "Input"
-    for file in os.listdir(input_dir):
+# Function to find all MP3 files in the input directory
+def find_mp3s_in_input(input_dir):
+    files = []
+    for file in sorted(os.listdir(input_dir)):
         if file.endswith(".mp3"):
-            return os.path.join(input_dir, file)
-    return None
+            files.append(os.path.join(input_dir, file))
+    return files
 
 # Argument parsing
 parser = argparse.ArgumentParser()
@@ -187,53 +187,70 @@ parser.add_argument("--model", default="base", help="Model to use")
 parser.add_argument("--threads", type=int, default=6, help="Number of threads to use")
 parser.add_argument("--custom_chapter_phrase", default="YK28sSr9w", help="Custom phrase to use for chapter detection instead of default")
 parser.add_argument("--chapter_index", type=int, default=0, help="Number at which chapter file names will start")
+parser.add_argument("--input_dir", default="Input", help="Directory to search for MP3 files (default: Input)")
+parser.add_argument("--output_dir", default="Output", help="Directory to write output files to (default: Output)")
 parser.add_argument("--no_intro", help="Do not name first output file 'Intro'")
 
 args = parser.parse_args()
 
-# Use the provided input file or find the first MP3 in the "Input" folder
-file = args.input if args.input else find_first_mp3_in_input()
+# Expand ~ in paths
+args.input_dir = os.path.expanduser(args.input_dir)
+args.output_dir = os.path.expanduser(args.output_dir)
+if args.input:
+    args.input = os.path.expanduser(args.input)
 
-if not file:
-    raise FileNotFoundError("No MP3 file found in the 'Input' directory and no input file specified.")
+# Find files to process
+if args.input:
+    files = [args.input]
+else:
+    files = find_mp3s_in_input(args.input_dir)
+
+if not files:
+    raise FileNotFoundError(f"No MP3 file found in the '{args.input_dir}' directory and no input file specified.")
 
 model_name = args.model
 n_threads = args.threads
+model = None
 
-srt_filename = os.path.splitext(file)[0] + ".srt"
+for file in files:
+    print(f"\n{'='*60}")
+    print(f"Processing: {file}")
+    print(f"{'='*60}")
 
-if os.path.exists(srt_filename):
-    print(f"Using existing SRT file: {srt_filename}")
-    segments = parse_srt_file(srt_filename)
-else:
-    print(f"Transcribing {file} with model {model_name}")
-    # Load the whisper.cpp model
-    model = Model(model_name, n_threads=n_threads, print_realtime=False, print_progress=True, max_len=16)
-    # Transcribe the audio
-    segments = model.transcribe(file)
-    # Create SRT file
-    create_srt_file(segments, srt_filename)
-    print(f"Created SRT file: {srt_filename}")
+    srt_filename = os.path.splitext(file)[0] + ".srt"
 
-chapters = []
-current_start = 0  # Start from the beginning of the file
-if args.no_intro:
-    current_chapter_name = "Chapter {args.chapter_index}"
-else:
-    current_chapter_name = "Intro"  # Default name for the first segment
+    if os.path.exists(srt_filename):
+        print(f"Using existing SRT file: {srt_filename}")
+        segments = parse_srt_file(srt_filename)
+    else:
+        print(f"Transcribing {file} with model {model_name}")
+        # Load the whisper.cpp model (once, reuse across files)
+        if model is None:
+            model = Model(model_name, n_threads=n_threads, print_realtime=False, print_progress=True, max_len=16)
+        # Transcribe the audio
+        segments = model.transcribe(file)
+        # Create SRT file
+        create_srt_file(segments, srt_filename)
+        print(f"Created SRT file: {srt_filename}")
 
+    chapters = []
+    current_start = 0  # Start from the beginning of the file
+    if args.no_intro:
+        current_chapter_name = "Chapter {args.chapter_index}"
+    else:
+        current_chapter_name = "Intro"  # Default name for the first segment
 
-# Identify chapters based on the keyword "Chapter" followed by a number
-for segment in segments:
-    if is_chapter(segment.text):
-        if current_start is not None:
-            chapters.append((current_start, (segment.t0 * 10), current_chapter_name))
-        current_start = segment.t0 * 10
-        current_chapter_name = segment.text
+    # Identify chapters based on the keyword "Chapter" followed by a number
+    for segment in segments:
+        if is_chapter(segment.text):
+            if current_start is not None:
+                chapters.append((current_start, (segment.t0 * 10), current_chapter_name))
+            current_start = segment.t0 * 10
+            current_chapter_name = segment.text
 
-# Add the last chapter if it exists
-if current_start is not None:
-    chapters.append((current_start, segments[-1].t1 * 10, current_chapter_name))
+    # Add the last chapter if it exists
+    if current_start is not None:
+        chapters.append((current_start, segments[-1].t1 * 10, current_chapter_name))
 
-# Create structured output
-create_output_structure(file, chapters, segments)
+    # Create structured output
+    create_output_structure(file, chapters, segments, args.output_dir)
